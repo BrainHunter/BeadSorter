@@ -6,7 +6,15 @@
 #define dirPin 2 //Stepper
 #define stepPin 3 //Stepper
 #define motorInterfaceType 1 //Stepper
-#define stepperMulti 100 //Stepper
+
+#define stepperMaxSpeed 6000
+#define stepperAccel 9000
+
+//#define stepperMulti 100 //Stepper
+#define stepperStepsPerRot 200
+#define stepperMicroStepping 16
+#define numContainerSlots 16    // in reality there are only 12, but 
+#define stepperMulti (stepperStepsPerRot*stepperMicroStepping/numContainerSlots)
 
 #define motorSpeed 255 //Container Motor
 #define GSM2 5 // Container Motor
@@ -14,10 +22,22 @@
 #define in4 6 //Container Motor
 
 #define setupPin 11 //Setup
-#define photoSensorPin A0 //Photo Sensor
-#define nullScanOffset 200 
 
-#define angle 15 //Servo
+#define photoSensorPin A0 //Photo Sensor
+#define photoSensorThreshold 600
+
+
+#define nullScanOffset 15 
+
+#define servoAngleIn 28 //Servo
+#define servoAngleOut 51
+#define servoAngleWiggle 2
+#define servoPin 8
+
+
+// #define DEBUG_PROG 1 // Stepper test
+
+
 
 // Parameters: https://learn.adafruit.com/adafruit-color-sensors/program-it
 //Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_24MS, TCS34725_GAIN_1X);
@@ -64,14 +84,32 @@ void setup() {
   Serial.println("BeadSorter start");
 
   //Serial.println("Analyzer start");
-  servo.attach(8);
-  servo.write(angle);
+  servo.attach(servoPin);
+  servo.write(servoAngleIn);
 
   //stepper.setMaxSpeed(4000);
   //stepper.setAcceleration(5000);
-  stepper.setMaxSpeed(6000);
-  stepper.setAcceleration(9000);
+  stepper.setMaxSpeed(stepperMaxSpeed);
+  stepper.setAcceleration(stepperAccel);
   stepper.setCurrentPosition(0);
+
+#if defined DEBUG_PROG && DEBUG_PROG == 1
+  while (1)
+  {
+      Serial.println("goto 1000");
+      stepper.moveTo(1000);
+      stepper.runToPosition();
+
+    Serial.println("goto 0");
+      delay(400);
+      stepper.moveTo(0);
+      stepper.runToPosition();
+
+      delay(400);
+  }
+#endif
+
+
 
   if (tcs.begin()) {
     Serial.println("Sensor found");
@@ -106,7 +144,7 @@ void loop() {
   photoSensor = analogRead(photoSensorPin);
   //Serial.println("");Serial.println(photoSensor);
 
-  if (photoSensor > 750) {
+  if (photoSensor > photoSensorThreshold) {
     if (!digitalRead(in3) && !digitalRead(in4)) {
       digitalWrite(in3, LOW);  // start
       digitalWrite(in4, HIGH);
@@ -150,7 +188,12 @@ void loop() {
     sortBeadToDynamicArray();
     errorCounter = 0;
   } else {
-    Serial.print(".");
+    //Serial.print(".");
+    Serial.print("\tClear:"); Serial.print(resultColor[0]);
+    Serial.print("\tRed:"); Serial.print(resultColor[1]);
+    Serial.print("\tGreen:"); Serial.print(resultColor[2]);
+    Serial.print("\tBlue:"); Serial.print(resultColor[3]);
+    Serial.println("");
     errorCounter++;
   }
 
@@ -193,32 +236,63 @@ void addColor() {
 }
 
 void servoFeedIn() {
-  delay(200);
-  servo.write(16);
-  delay(200);
-  servo.write(18);
-  delay(200);
-  servo.write(17);
-  delay(200);
+  int low=servoAngleIn-servoAngleWiggle;
+  int high=servoAngleIn+servoAngleWiggle;
+
+  for(int i = low ; i<high ;i++)
+  {
+    servo.write(i);
+    delay(100);
+
+  } 
+  //delay(200);
+  //servo.write(16);
+  //delay(200);
+  //servo.write(18);
+  //delay(200);
+  //servo.write(17);
+  //delay(200);
 }
 
 void servoFeedOut() {
-  servo.write(41);
+
+  int low=servoAngleOut-servoAngleWiggle;
+  int high=servoAngleOut+servoAngleWiggle;
+
+  for(int count = 0 ; count < 3 ; count ++)
+  {
+    for(int i = low ; i<high ;i++)
+    {
+      servo.write(i);
+      delay(100);
+
+    } 
+    for(int i = high ; i<low ;i--)
+    {
+      servo.write(i);
+      delay(50);
+
+    } 
+  }
+
   delay(200);
-  servo.write(44);
-  delay(200);
-  servo.write(41);
-  delay(200);
-  servo.write(44);
-  delay(200);
-  servo.write(41);
-  delay(200);
-  servo.write(44);
-  delay(200);
-  servo.write(41);
-  delay(200);
-  servo.write(44);
-  delay(500);
+
+  // servo.write(41);
+  // delay(200);
+  // servo.write(44);
+  // delay(200);
+  // servo.write(41);
+  // delay(200);
+  // servo.write(44);
+  // delay(200);
+  // servo.write(41);
+  // delay(200);
+  // servo.write(44);
+  // delay(200);
+  // servo.write(41);
+  // delay(200);
+  // servo.write(44);
+  // delay(500);
 }
 
 void readColorSensor() {
