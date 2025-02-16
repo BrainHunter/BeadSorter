@@ -587,18 +587,23 @@ void copyColorsToTemp() {
 
 void moveSorterToPosition(int position) {
   int currentPos = stepper.currentPosition() / stepperMulti;
-  int diffToPosition = abs(position - currentPos);
+  int diffToPosition = position - currentPos;
 
   // TODO: Es wird nur sequentiell angesteuert. 
-  //  if ((diffToPosition)>8){
-  //    int diff = 16 - diffToPosition ;
-  //    position = -diff;
-  //  }
-
+  if (diffToPosition > 8){  // motor can go in negative direction over the zero
+     position = currentPos + diffToPosition - 16;
+     //int diff = 16 - diffToPosition ;
+     //position = -diff;
+  }else if(diffToPosition < -8){  // motor can go in positive direction over the 15)
+    position = currentPos + diffToPosition + 16;
+  }
   position *= stepperMulti;
 
   stepper.moveTo(position);
   stepper.runToPosition();
+
+  // correct stepper position into ususal range:
+  stepper.setCurrentPosition( stepper.currentPosition() % (16*stepperMulti) );
 }
 
 void stopHopperMotor() {
