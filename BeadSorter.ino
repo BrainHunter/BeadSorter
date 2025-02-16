@@ -27,7 +27,7 @@
 #define photoSensorThreshold 600
 
 
-#define nullScanOffset 15 
+#define nullScanOffset 150 
 
 #define servoAngleIn 28 //Servo
 #define servoAngleOut 51
@@ -36,12 +36,12 @@
 
 
 // #define DEBUG_PROG 1 // Stepper test
-
+// #define DEBUG_PROG 2 // Color Sensor test
 
 
 // Parameters: https://learn.adafruit.com/adafruit-color-sensors/program-it
 //Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_24MS, TCS34725_GAIN_1X);
-Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_50MS, TCS34725_GAIN_1X);
+Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_50MS, TCS34725_GAIN_16X);
 //Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_101MS, TCS34725_GAIN_1X);
 
 //Max allowed color difference = thresholdFactor ∗ colorValue + offset (0,08/40)
@@ -72,6 +72,7 @@ const int dynamicContainerArraySize = 16;
 int dynamicContainerArray[dynamicContainerArraySize] = { -1, 666, -1, -1, -1, 666, -1, -1, -1, 666, -1, -1, -1, 666 , -1 , -1};
 
 void setup() {
+  // Setup Hopper Motor Pins 
   pinMode(GSM2, OUTPUT);
   pinMode(in3, OUTPUT);
   pinMode(in4, OUTPUT);
@@ -117,6 +118,21 @@ void setup() {
     Serial.println("TCS34725 not found ... exiting!");
     while (1); // Stop program
   }
+
+#if defined DEBUG_PROG && DEBUG_PROG == 2
+  servoFeedOut();
+  servoFeedIn();
+  while (1)
+  {
+    readColorSensor();
+    Serial.print("Clear:"); Serial.print(resultColor[0]);
+    Serial.print("\tRed:"); Serial.print(resultColor[1]);
+    Serial.print("\tGreen:"); Serial.print(resultColor[2]);
+    Serial.print("\tBlue:"); Serial.print(resultColor[3]);
+    Serial.println("");
+    delay(400);
+  }
+#endif
 
   if (!autoSort) {
     Serial.println("Import default Colors");
