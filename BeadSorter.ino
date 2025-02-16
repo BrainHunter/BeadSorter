@@ -20,6 +20,7 @@
 #define GSM2 5 // Container Motor
 #define in3 7 //Container Motor
 #define in4 6 //Container Motor
+#define hopperMotorReverseTime  9000 //in ms - time of ~ revolution
 
 #define setupPin 11 //Setup
 
@@ -53,14 +54,11 @@ Servo servo;
 AccelStepper stepper = AccelStepper(motorInterfaceType, stepPin, dirPin);
 
 boolean autoSort = true;
-int errorCounter = 0;
-int maxErrorCounter = 2;
 int resultColor[4] = {0, 0, 0, 0};
 int medianColors[4][4];
 int storedColors[16][4];
 int tempStoredColors[16][4];
 
-int photoSensor = 0;
 
 boolean calibrateNullScan = true;
 int nullScanValues[4] = {6618, 1860, 2282, 2116}; //adjust these if no calibration
@@ -157,22 +155,10 @@ void setup() {
 }
 
 void loop() {
-  photoSensor = analogRead(photoSensorPin);
-  //Serial.println("");Serial.println(photoSensor);
+  static bool successfullBead = false;
 
-  if (photoSensor > photoSensorThreshold) {
-    if (!digitalRead(in3) && !digitalRead(in4)) {
-      digitalWrite(in3, LOW);  // start
-      digitalWrite(in4, HIGH);
-      analogWrite(GSM2, motorSpeed);
-    }
-    //Serial.println("Photosensor OK");
-  } else {
-    digitalWrite(in3, LOW);  // stop
-    digitalWrite(in4, LOW);
-    Serial.println("Photosensor Fail");
-    //analogWrite(GSM2, 0);
-  }
+  handleHopperMotor(successfullBead);
+
 
   if (digitalRead(setupPin) == HIGH) {
     while (digitalRead(setupPin) == HIGH) {
@@ -202,7 +188,7 @@ void loop() {
     Serial.print("\tBlue:"); Serial.print(resultColor[3]);
     Serial.println("");
     sortBeadToDynamicArray();
-    errorCounter = 0;
+    successfullBead = true;
   } else {
     //Serial.print(".");
     Serial.print("\tClear:"); Serial.print(resultColor[0]);
@@ -210,33 +196,77 @@ void loop() {
     Serial.print("\tGreen:"); Serial.print(resultColor[2]);
     Serial.print("\tBlue:"); Serial.print(resultColor[3]);
     Serial.println("");
-    errorCounter++;
+    successfullBead = false;
   }
 
   servoFeedOut();
 
-  //Serial.print("errorcounter: ");Serial.print(errorCounter);Serial.print(" maxErrorCounter:"); Serial.println(maxErrorCounter);
-  if (errorCounter >= maxErrorCounter) {
-    reverseContainerMotor();
-    errorCounter = 0;
+
+}
+
+
+/* Logic for the hopper motor
+*
+*  param successfullBead
+*
+*/
+void handleHopperMotor(bool successfullBead)
+{
+  static unsigned long timestamp = 0;
+  static bool direction = false;  
+  int photoSensor = 0;
+
+  // reverse motor if no successfull beads after timeout
+  if(!successfullBead )
+  {
+    if(timediff(timestamp, millis()) > hopperMotorReverseTime)
+    {
+      direction = !direction;
+      timestamp = millis();
+    }
+  }
+  else
+  {
+    timestamp = millis();
+  }
+
+  photoSensor = analogRead(photoSensorPin);
+  //Serial.println("");Serial.println(photoSensor);
+
+  if (photoSensor > photoSensorThreshold) {   //PhotoSensor detected no beads in the feeding tube
+    //if (!isHopperMotorRunning()) {
+      startHopperMotor(direction);
+    //}
+    //Serial.println("Photosensor OK");
+  } else {                                    //PhotoSensor detected beads in the feeding tube --> stop the motor
+    stopHopperMotor();
+    Serial.println("Photosensor detected Beads");
   }
 
 }
+
+unsigned long timediff(unsigned long t1, unsigned long t2)
+{
+    signed long d = (signed long)t1 - (signed long)t2;
+    if(d < 0) d = -d;
+    return (unsigned long) d;
+}
+
 
 void addColor() {
   int colorIndex;
 
   clearMedianColors();
-  stopMotor();
+  stopHopperMotor();
 
   Serial.print("Insert Color to register. Press button when done...");
 
   while (digitalRead(setupPin) == LOW) {
   }
 
-  startMotor();
+  startHopperMotor(false);
   delay(10000);
-  stopMotor();
+  stopHopperMotor();
   for (int i = 0; i < 4; i++) {
     Serial.print(i + 1); Serial.print("/4: ");
     servoFeedIn();
@@ -248,7 +278,7 @@ void addColor() {
   }
 
   calcMedianAndStore();
-  startMotor();
+  startHopperMotor(false);
 }
 
 void servoFeedIn() {
@@ -571,34 +601,32 @@ void moveSorterToPosition(int position) {
   stepper.runToPosition();
 }
 
-void stopMotor() {
+void stopHopperMotor() {
   digitalWrite(in3, LOW);
   digitalWrite(in4, LOW);
   analogWrite(GSM2, motorSpeed);
 }
 
-void startMotor() {
-  digitalWrite(in3, HIGH);
-  digitalWrite(in4, LOW);
-  analogWrite(GSM2, motorSpeed);
-}
-
-void reverseContainerMotor() {
-
-  if (digitalRead(in3)) {
-    digitalWrite(in3, LOW);
-  } else {
+void startHopperMotor(bool dir) {
+  if(dir)
+  {
     digitalWrite(in3, HIGH);
-  }
-
-  if (!digitalRead(in4)) {
-    digitalWrite(in4, HIGH);
-  } else {
     digitalWrite(in4, LOW);
   }
-
+  else
+  {
+    digitalWrite(in3, LOW);
+    digitalWrite(in4, HIGH);
+  }
   analogWrite(GSM2, motorSpeed);
 }
+
+// return true if 
+bool isHopperMotorRunning()
+{
+  return digitalRead(in3) || digitalRead(in4);
+}
+
 
 //void updateDetectedColorFromTempStoredColor(int i) {
 //  Serial.println(""); Serial.println("Updating color.");
