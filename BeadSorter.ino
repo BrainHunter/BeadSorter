@@ -42,7 +42,7 @@
 
 // Parameters: https://learn.adafruit.com/adafruit-color-sensors/program-it
 //Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_24MS, TCS34725_GAIN_1X);
-Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_50MS, TCS34725_GAIN_16X);
+Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_101MS, TCS34725_GAIN_16X);
 //Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_101MS, TCS34725_GAIN_1X);
 
 //Max allowed color difference = thresholdFactor ∗ colorValue + offset (0,08/40)
@@ -54,10 +54,10 @@ Servo servo;
 AccelStepper stepper = AccelStepper(motorInterfaceType, stepPin, dirPin);
 
 boolean autoSort = true;
-int resultColor[4] = {0, 0, 0, 0};
-int medianColors[4][4];
-int storedColors[16][4];
-int tempStoredColors[16][4];
+unsigned int resultColor[4] = {0, 0, 0, 0};
+unsigned int medianColors[4][4];
+unsigned int storedColors[16][4];
+unsigned int tempStoredColors[16][4];
 
 
 boolean calibrateNullScan = true;
@@ -190,12 +190,12 @@ void loop() {
     sortBeadToDynamicArray();
     successfullBead = true;
   } else {
-    //Serial.print(".");
-    Serial.print("\tClear:"); Serial.print(resultColor[0]);
-    Serial.print("\tRed:"); Serial.print(resultColor[1]);
-    Serial.print("\tGreen:"); Serial.print(resultColor[2]);
-    Serial.print("\tBlue:"); Serial.print(resultColor[3]);
-    Serial.println("");
+    Serial.print(".");
+    //Serial.print("\tClear:"); Serial.print(resultColor[0]);
+    //Serial.print("\tRed:"); Serial.print(resultColor[1]);
+    //Serial.print("\tGreen:"); Serial.print(resultColor[2]);
+    //Serial.print("\tBlue:"); Serial.print(resultColor[3]);
+    //Serial.println("");
     successfullBead = false;
   }
 
@@ -506,7 +506,7 @@ void sortBeadToDynamicArray() {
           //Serial.println(tempStoredColors[ i ][0]);
 
           int containerNo = getContainerNo(tempStoredColors[ i ][0]);
-          //Serial.print("move stepper to container No:"); Serial.println(containerNo);
+            Serial.print("move stepper to container No:"); Serial.println(containerNo);
           moveSorterToPosition(containerNo);
           found = true;
           break;
@@ -520,10 +520,12 @@ void sortBeadToDynamicArray() {
     if (autoSort) {
       Serial.println("autosort!");
       if (!allContainerFull()) {
-        Serial.println("not allContainerFull. StoreColor");
+        Serial.print("not allContainerFull. StoreColor ");
+        Serial.println(autoColorCounter);
         storeColor(autoColorCounter, resultColor[1], resultColor[2], resultColor[3]);
+        int containerNo = getContainerNo(autoColorCounter);
         autoColorCounter++;
-        moveSorterToPosition(dynamicContainerArraySize - 1);
+        moveSorterToPosition(containerNo);
       } else {
         moveSorterToPosition(dynamicContainerArraySize - 1);
       }
@@ -578,7 +580,7 @@ bool allContainerFull() {
     arrayCounter++;
   }
 
-  return arrayCounter >= 15;
+  return arrayCounter >= 15; // 15 is reserved for non sortable
 }
 
 void copyColorsToTemp() {
