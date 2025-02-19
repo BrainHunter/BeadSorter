@@ -501,15 +501,10 @@ void setNullScanValues() {
   Serial.print("Calibration results: "); Serial.print(nullScanValues[0]); Serial.print(" "); Serial.print(nullScanValues[1]); Serial.print(" "); Serial.print(nullScanValues[2]); Serial.print(" "); Serial.print(nullScanValues[3]); Serial.println("");
 }
 
-void sortBeadToDynamicArray() {
-  int threshold;
-  int upperLimit;
-  int lowerLimit;
-  boolean found =  false;
-
-  copyColorsToTemp();
-
-  Serial.println("Analyzing Results:");
+int findColorInStorage()
+{
+  int ret=-1;
+  copyColorsToTemp(); 
 
   for (int i = 0; i < 16; i++) {
     threshold = thresholdFactor * resultColor[0] + offset;
@@ -543,27 +538,43 @@ void sortBeadToDynamicArray() {
 
           if (tempStoredColors[ i ][3] >= lowerLimit and tempStoredColors[ i ][3] <= upperLimit) {
             //          Serial.print("Color is #"); Serial.print(tempStoredColors[ i ][0]); Serial.println("");
-            if (autoSort) {
-              Serial.print("Color is R:"); Serial.print(tempStoredColors[ i ][1]); Serial.print(" G:"); Serial.print(tempStoredColors[ i ][2]); Serial.print(" B:"); Serial.print(tempStoredColors[ i ][3]);
-              //            updateStoredColorCount(i);
-              //            updateDetectedColorFromTempStoredColor(i);
-            } else {
-              Serial.print("Color is #"); Serial.print(getColorNameFromNo(i)); Serial.print(". ");
-            }
-            //Serial.println(tempStoredColors[ i ][0]);
-
-            int containerNo = getContainerNo(i);
-              Serial.print("move stepper to container No:"); Serial.println(containerNo);
-            moveSorterToPosition(containerNo);
-            found = true;
-            break;
+            return i;
           }
         }
       }
     }
   }
+  return ret;
+}
 
-  if (!found) {
+void sortBeadToDynamicArray() {
+  int threshold;
+  int upperLimit;
+  int lowerLimit;
+
+  Serial.println("Analyzing Results:");
+
+  int index=findColorInStorage();
+
+  if(index != -1)
+  {
+    Serial.print("Color is #"); Serial.print(tempStoredColors[ index ][0]); Serial.println("");
+    if (autoSort) {
+      Serial.print("Color is R:"); Serial.print(tempStoredColors[ index ][1]); Serial.print(" G:"); Serial.print(tempStoredColors[ index ][2]); Serial.print(" B:"); Serial.print(tempStoredColors[ index ][3]);
+      //            updateStoredColorCount(i);
+      //            updateDetectedColorFromTempStoredColor(i);
+    } else {
+      Serial.print("Color is #"); Serial.print(getColorNameFromNo(index)); Serial.print(". ");
+    }
+    //Serial.println(tempStoredColors[ index ][0]);
+
+    int containerNo = getContainerNo(index);
+    Serial.print("move stepper to container No:"); Serial.println(containerNo);
+    moveSorterToPosition(containerNo);
+
+  }
+  else
+  {
     Serial.println("not found");
     if (autoSort) {
       Serial.println("autosort!");
