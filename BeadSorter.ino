@@ -157,6 +157,22 @@ void setup() {
 void loop() {
   static bool successfullBead = false;
 
+  while(Serial.available())
+  {
+    int c;
+    c = Serial.read();
+    switch(c)
+    {
+      case 't':
+      case 'T': printTables();
+                break;
+      default: break;
+    }
+  }
+
+
+
+
   handleHopperMotor(successfullBead);
 
 
@@ -201,6 +217,33 @@ void loop() {
 
   servoFeedOut();
 
+
+}
+
+/*
+*   print all color tables to serial for debugging.
+*/
+void printTables(){
+  char line[128];
+
+  Serial.println("Nullscan:");
+  snprintf(line, 128,"%2d c=%5u r=%5u g=%5u b=%5u", 0, nullScanValues[0],nullScanValues[1],nullScanValues[2],nullScanValues[3]);
+  Serial.println(line);
+
+  Serial.println("Stored colors:");
+  for(int i = 0; i< 16; i++)
+  {
+    snprintf(line, 128,"%2d c=%5u r=%5u g=%5u b=%5u", i, storedColors[i][0],storedColors[i][1],storedColors[i][2],storedColors[i][3]);
+    Serial.println(line);
+  }
+
+  Serial.println("Stored colors:");
+  for( int i=0; i< dynamicContainerArraySize; i++)
+  {
+    Serial.print(dynamicContainerArray[i]);
+    Serial.print(" ");
+  }
+  Serial.println(" ");
 
 }
 
