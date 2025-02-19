@@ -391,10 +391,10 @@ void readColorSensor() {
   delay(200); // Farbmessung dauert c. 50ms
   tcs.getRawData(&red, &green, &blue, &clearcol);
 
-  resultColor[0] = clearcol;
-  resultColor[1] = red;
-  resultColor[2] = green;
-  resultColor[3] = blue;
+  resultColor[0] = (unsigned int)clearcol;
+  resultColor[1] = (unsigned int)red;
+  resultColor[2] = (unsigned int)green;
+  resultColor[3] = (unsigned int)blue;
 }
 
 int addColorToMedianColors(int noOfTest) {
@@ -440,19 +440,19 @@ void calcMedianAndStore() {
 }
 
 void importDefaultColorSet() {
-  storeColor(0, 1032, 854, 766); //Orange
-  storeColor(1, 1331, 1321, 918); //Bright Yellow
-  storeColor(2, 532, 914, 797); //Green
-  storeColor(3, 512, 845, 967); //Dark Blue
-  storeColor(4, 1257, 1151, 1129); //Rose
-  storeColor(5, 1265, 1215, 1100); //Skin
-  storeColor(6, 756, 757, 721); // Red
-  storeColor(7, 1525, 1858, 1735); //White
-  storeColor(8, 512, 742, 700); //Black
-  storeColor(9, 939, 1462, 1101); //Lime Green
-  storeColor(10, 712, 1298, 1121); //Mint Green
-  storeColor(11, 1213, 975, 914); //Coral
-  storeColor(12, 1185, 1115, 876); //Dark Yellow
+  storeColor(0, -1, 1032, 854, 766); //Orange
+  storeColor(1, -1, 1331, 1321, 918); //Bright Yellow
+  storeColor(2, -1, 532, 914, 797); //Green
+  storeColor(3, -1, 512, 845, 967); //Dark Blue
+  storeColor(4, -1, 1257, 1151, 1129); //Rose
+  storeColor(5, -1, 1265, 1215, 1100); //Skin
+  storeColor(6, -1, 756, 757, 721); // Red
+  storeColor(7, -1, 1525, 1858, 1735); //White
+  storeColor(8, -1, 512, 742, 700); //Black
+  storeColor(9, -1, 939, 1462, 1101); //Lime Green
+  storeColor(10, -1, 712, 1298, 1121); //Mint Green
+  storeColor(11, -1, 1213, 975, 914); //Coral
+  storeColor(12, -1, 1185, 1115, 876); //Dark Yellow
 }
 
 String getColorNameFromNo(int colorNo) {
@@ -474,8 +474,8 @@ String getColorNameFromNo(int colorNo) {
   }
 }
 
-void storeColor(int index, int red, int green, int blue) {
-  storedColors[ index ][0] = index;
+void storeColor(int index, int Clear, int red, int green, int blue) {
+  storedColors[ index ][0] = Clear; 
   storedColors[ index ][1] = red;
   storedColors[ index ][2] = green;
   storedColors[ index ][3] = blue;
@@ -512,47 +512,52 @@ void sortBeadToDynamicArray() {
   Serial.println("Analyzing Results:");
 
   for (int i = 0; i < 16; i++) {
-    threshold = thresholdFactor * resultColor[1] + offset;
-    upperLimit = resultColor[1] + threshold;
-    lowerLimit = resultColor[1] - threshold;
-    //        Serial.print(i);Serial.print(":R:"); Serial.print(threshold);Serial.println("");
-    //        Serial.print(i);Serial.print(":R:"); Serial.print(upperLimit);Serial.println("");
-    //        Serial.print(i);Serial.print(":R:"); Serial.print(lowerLimit);Serial.println("");
-    //        Serial.println(tempStoredColors[ i][1]);
-    if (tempStoredColors[ i ][1] >= lowerLimit and tempStoredColors[ i ][1] <= upperLimit) {
-      threshold = thresholdFactor * resultColor[2] + offset;
-      upperLimit = resultColor[2] + threshold;
-      lowerLimit = resultColor[2] - threshold;
-      //
-      //            Serial.print(i);Serial.print(":G:"); Serial.print(threshold);Serial.println("");
-      //            Serial.print(i);Serial.print(":G:"); Serial.print(upperLimit);Serial.println("");
-      //            Serial.print(i);Serial.print(":G:"); Serial.print(lowerLimit);Serial.println("");
-
-      if (tempStoredColors[ i ][2] >= lowerLimit and tempStoredColors[ i ][2] <= upperLimit) {
-        threshold = thresholdFactor * resultColor[3] + offset;
-        upperLimit = resultColor[3] + threshold;
-        lowerLimit = resultColor[3] - threshold;
+    threshold = thresholdFactor * resultColor[0] + offset;
+    upperLimit = resultColor[0] + threshold;
+    lowerLimit = resultColor[0] - threshold;
+    if (tempStoredColors[ i ][0] >= lowerLimit and tempStoredColors[ i ][0] <= upperLimit) {
+      threshold = thresholdFactor * resultColor[1] + offset;
+      upperLimit = resultColor[1] + threshold;
+      lowerLimit = resultColor[1] - threshold;
+      //        Serial.print(i);Serial.print(":R:"); Serial.print(threshold);Serial.println("");
+      //        Serial.print(i);Serial.print(":R:"); Serial.print(upperLimit);Serial.println("");
+      //        Serial.print(i);Serial.print(":R:"); Serial.print(lowerLimit);Serial.println("");
+      //        Serial.println(tempStoredColors[ i][1]);
+      if (tempStoredColors[ i ][1] >= lowerLimit and tempStoredColors[ i ][1] <= upperLimit) {
+        threshold = thresholdFactor * resultColor[2] + offset;
+        upperLimit = resultColor[2] + threshold;
+        lowerLimit = resultColor[2] - threshold;
         //
-        //                Serial.print(i);Serial.print(":B:"); Serial.print(threshold);Serial.println("");
-        //                Serial.print(i);Serial.print(":B:"); Serial.print(upperLimit);Serial.println("");
-        //                Serial.print(i);Serial.print(":B:"); Serial.print(lowerLimit);Serial.println("");
+        //            Serial.print(i);Serial.print(":G:"); Serial.print(threshold);Serial.println("");
+        //            Serial.print(i);Serial.print(":G:"); Serial.print(upperLimit);Serial.println("");
+        //            Serial.print(i);Serial.print(":G:"); Serial.print(lowerLimit);Serial.println("");
 
-        if (tempStoredColors[ i ][3] >= lowerLimit and tempStoredColors[ i ][3] <= upperLimit) {
-          //          Serial.print("Color is #"); Serial.print(tempStoredColors[ i ][0]); Serial.println("");
-          if (autoSort) {
-            Serial.print("Color is R:"); Serial.print(tempStoredColors[ i ][1]); Serial.print(" G:"); Serial.print(tempStoredColors[ i ][2]); Serial.print(" B:"); Serial.print(tempStoredColors[ i ][3]);
-            //            updateStoredColorCount(i);
-            //            updateDetectedColorFromTempStoredColor(i);
-          } else {
-            Serial.print("Color is #"); Serial.print(getColorNameFromNo(tempStoredColors[ i ][0])); Serial.print(". ");
+        if (tempStoredColors[ i ][2] >= lowerLimit and tempStoredColors[ i ][2] <= upperLimit) {
+          threshold = thresholdFactor * resultColor[3] + offset;
+          upperLimit = resultColor[3] + threshold;
+          lowerLimit = resultColor[3] - threshold;
+          //
+          //                Serial.print(i);Serial.print(":B:"); Serial.print(threshold);Serial.println("");
+          //                Serial.print(i);Serial.print(":B:"); Serial.print(upperLimit);Serial.println("");
+          //                Serial.print(i);Serial.print(":B:"); Serial.print(lowerLimit);Serial.println("");
+
+          if (tempStoredColors[ i ][3] >= lowerLimit and tempStoredColors[ i ][3] <= upperLimit) {
+            //          Serial.print("Color is #"); Serial.print(tempStoredColors[ i ][0]); Serial.println("");
+            if (autoSort) {
+              Serial.print("Color is R:"); Serial.print(tempStoredColors[ i ][1]); Serial.print(" G:"); Serial.print(tempStoredColors[ i ][2]); Serial.print(" B:"); Serial.print(tempStoredColors[ i ][3]);
+              //            updateStoredColorCount(i);
+              //            updateDetectedColorFromTempStoredColor(i);
+            } else {
+              Serial.print("Color is #"); Serial.print(getColorNameFromNo(i)); Serial.print(". ");
+            }
+            //Serial.println(tempStoredColors[ i ][0]);
+
+            int containerNo = getContainerNo(i);
+              Serial.print("move stepper to container No:"); Serial.println(containerNo);
+            moveSorterToPosition(containerNo);
+            found = true;
+            break;
           }
-          //Serial.println(tempStoredColors[ i ][0]);
-
-          int containerNo = getContainerNo(tempStoredColors[ i ][0]);
-            Serial.print("move stepper to container No:"); Serial.println(containerNo);
-          moveSorterToPosition(containerNo);
-          found = true;
-          break;
         }
       }
     }
@@ -565,7 +570,7 @@ void sortBeadToDynamicArray() {
       if (!allContainerFull()) {
         Serial.print("not allContainerFull. StoreColor ");
         Serial.println(autoColorCounter);
-        storeColor(autoColorCounter, resultColor[1], resultColor[2], resultColor[3]);
+        storeColor(autoColorCounter, resultColor[0] , resultColor[1], resultColor[2], resultColor[3]);
         int containerNo = getContainerNo(autoColorCounter);
         autoColorCounter++;
         moveSorterToPosition(containerNo);
