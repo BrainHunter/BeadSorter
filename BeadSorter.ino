@@ -57,7 +57,6 @@ boolean autoSort = true;
 unsigned int resultColor[4] = {0, 0, 0, 0};
 unsigned int medianColors[4][4];
 unsigned int storedColors[16][4];
-unsigned int tempStoredColors[16][4];
 
 
 boolean calibrateNullScan = true;
@@ -332,15 +331,26 @@ void servoFeedIn() {
   {
     servo.write(i);
     delay(100);
-
   } 
-  //delay(200);
-  //servo.write(16);
-  //delay(200);
-  //servo.write(18);
-  //delay(200);
-  //servo.write(17);
-  //delay(200);
+}
+
+void servoWiggleIn() {
+  int low=servoAngleIn-servoAngleWiggle;
+  int high=servoAngleIn+servoAngleWiggle;
+
+  for(int c=0; c< 3; c++)
+  {
+    for(int i = high ; i>low ;i--)
+    {
+      servo.write(i);
+      delay(100);
+    } 
+    for(int i = low ; i<high ;i++)
+    {
+      servo.write(i);
+      delay(100);
+    } 
+  }
 }
 
 void servoFeedOut() {
@@ -354,34 +364,14 @@ void servoFeedOut() {
     {
       servo.write(i);
       delay(100);
-
     } 
     for(int i = high ; i<low ;i--)
     {
       servo.write(i);
       delay(50);
-
     } 
   }
-
   delay(200);
-
-  // servo.write(41);
-  // delay(200);
-  // servo.write(44);
-  // delay(200);
-  // servo.write(41);
-  // delay(200);
-  // servo.write(44);
-  // delay(200);
-  // servo.write(41);
-  // delay(200);
-  // servo.write(44);
-  // delay(200);
-  // servo.write(41);
-  // delay(200);
-  // servo.write(44);
-  // delay(500);
 }
 
 void readColorSensor() {
@@ -504,21 +494,20 @@ void setNullScanValues() {
 int findColorInStorage()
 {
   int ret=-1;
-  copyColorsToTemp(); 
 
   for (int i = 0; i < 16; i++) {
     threshold = thresholdFactor * resultColor[0] + offset;
     upperLimit = resultColor[0] + threshold;
     lowerLimit = resultColor[0] - threshold;
-    if (tempStoredColors[ i ][0] >= lowerLimit and tempStoredColors[ i ][0] <= upperLimit) {
+    if (storedColors[ i ][0] >= lowerLimit and storedColors[ i ][0] <= upperLimit) {
       threshold = thresholdFactor * resultColor[1] + offset;
       upperLimit = resultColor[1] + threshold;
       lowerLimit = resultColor[1] - threshold;
       //        Serial.print(i);Serial.print(":R:"); Serial.print(threshold);Serial.println("");
       //        Serial.print(i);Serial.print(":R:"); Serial.print(upperLimit);Serial.println("");
       //        Serial.print(i);Serial.print(":R:"); Serial.print(lowerLimit);Serial.println("");
-      //        Serial.println(tempStoredColors[ i][1]);
-      if (tempStoredColors[ i ][1] >= lowerLimit and tempStoredColors[ i ][1] <= upperLimit) {
+      //        Serial.println(storedColors[ i][1]);
+      if (storedColors[ i ][1] >= lowerLimit and storedColors[ i ][1] <= upperLimit) {
         threshold = thresholdFactor * resultColor[2] + offset;
         upperLimit = resultColor[2] + threshold;
         lowerLimit = resultColor[2] - threshold;
@@ -527,7 +516,7 @@ int findColorInStorage()
         //            Serial.print(i);Serial.print(":G:"); Serial.print(upperLimit);Serial.println("");
         //            Serial.print(i);Serial.print(":G:"); Serial.print(lowerLimit);Serial.println("");
 
-        if (tempStoredColors[ i ][2] >= lowerLimit and tempStoredColors[ i ][2] <= upperLimit) {
+        if (storedColors[ i ][2] >= lowerLimit and storedColors[ i ][2] <= upperLimit) {
           threshold = thresholdFactor * resultColor[3] + offset;
           upperLimit = resultColor[3] + threshold;
           lowerLimit = resultColor[3] - threshold;
@@ -536,8 +525,8 @@ int findColorInStorage()
           //                Serial.print(i);Serial.print(":B:"); Serial.print(upperLimit);Serial.println("");
           //                Serial.print(i);Serial.print(":B:"); Serial.print(lowerLimit);Serial.println("");
 
-          if (tempStoredColors[ i ][3] >= lowerLimit and tempStoredColors[ i ][3] <= upperLimit) {
-            //          Serial.print("Color is #"); Serial.print(tempStoredColors[ i ][0]); Serial.println("");
+          if (storedColors[ i ][3] >= lowerLimit and storedColors[ i ][3] <= upperLimit) {
+            //          Serial.print("Color is #"); Serial.print(storedColors[ i ][0]); Serial.println("");
             return i;
           }
         }
@@ -558,15 +547,15 @@ void sortBeadToDynamicArray() {
 
   if(index != -1)
   {
-    Serial.print("Color is #"); Serial.print(tempStoredColors[ index ][0]); Serial.println("");
+    Serial.print("Color is #"); Serial.print(storedColors[ index ][0]); Serial.println("");
     if (autoSort) {
-      Serial.print("Color is R:"); Serial.print(tempStoredColors[ index ][1]); Serial.print(" G:"); Serial.print(tempStoredColors[ index ][2]); Serial.print(" B:"); Serial.print(tempStoredColors[ index ][3]);
+      Serial.print("Color is R:"); Serial.print(storedColors[ index ][1]); Serial.print(" G:"); Serial.print(storedColors[ index ][2]); Serial.print(" B:"); Serial.print(storedColors[ index ][3]);
       //            updateStoredColorCount(i);
       //            updateDetectedColorFromTempStoredColor(i);
     } else {
       Serial.print("Color is #"); Serial.print(getColorNameFromNo(index)); Serial.print(". ");
     }
-    //Serial.println(tempStoredColors[ index ][0]);
+    //Serial.println(storedColors[ index ][0]);
 
     int containerNo = getContainerNo(index);
     Serial.print("move stepper to container No:"); Serial.println(containerNo);
@@ -640,10 +629,6 @@ bool allContainerFull() {
   }
 
   return arrayCounter >= 15; // 15 is reserved for non sortable
-}
-
-void copyColorsToTemp() {
-  memcpy(tempStoredColors, storedColors, sizeof(tempStoredColors));
 }
 
 void moveSorterToPosition(int position) {
