@@ -38,6 +38,7 @@
 
 // #define DEBUG_PROG 1 // Stepper test
 // #define DEBUG_PROG 2 // Color Sensor test
+// #define DEBUG_PRINT_PHOTOSENS
 
 
 // Parameters: https://learn.adafruit.com/adafruit-color-sensors/program-it
@@ -273,8 +274,9 @@ void handleHopperMotor(bool successfullBead)
   }
 
   photoSensor = analogRead(photoSensorPin);
-  //Serial.println("");Serial.println(photoSensor);
-
+#ifdef DEBUG_PRINT_PHOTOSENS
+  Serial.println("");Serial.println(photoSensor);
+#endif
   if (photoSensor > photoSensorThreshold) {   //PhotoSensor detected no beads in the feeding tube
     //if (!isHopperMotorRunning()) {
       startHopperMotor(direction);
@@ -282,7 +284,8 @@ void handleHopperMotor(bool successfullBead)
     //Serial.println("Photosensor OK");
   } else {                                    //PhotoSensor detected beads in the feeding tube --> stop the motor
     stopHopperMotor();
-    Serial.println("Photosensor detected Beads");
+    Serial.print("Photosensor detected Beads ");
+    Serial.println(photoSensor);
   }
 
 }
