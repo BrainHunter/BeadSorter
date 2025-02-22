@@ -338,22 +338,18 @@ void servoFeedIn() {
 }
 
 void servoWiggleIn() {
-  int low=servoAngleIn-servoAngleWiggle;
-  int high=servoAngleIn+servoAngleWiggle;
+  int low=servoAngleIn-servoAngleWiggle*2;
+  int high=servoAngleIn+servoAngleWiggle*2;
 
   for(int c=0; c< 3; c++)
   {
-    for(int i = high ; i>low ;i--)
-    {
-      servo.write(i);
-      delay(100);
-    } 
-    for(int i = low ; i<high ;i++)
-    {
-      servo.write(i);
-      delay(100);
-    } 
+    servo.write(low);
+    delay(100);
+    servo.write(high);
+    delay(100);
   }
+  servo.write(servoAngleIn);
+  delay(100);
 }
 
 void servoFeedOut() {
@@ -413,13 +409,13 @@ void clearMedianColors() {
   memset(medianColors, 0, sizeof(medianColors));
 }
 
-void calcMedianAndStore() {
-  memset(resultColor, 0, sizeof(resultColor));
+void calcMedianAndStore() { //  this is not a "median" this is a "mean"
   for (int i = 0; i < 4; i++) {
+    long temp = 0;
     for (int j = 0; j < 4; j++) {
-      resultColor[i] += medianColors[ j ][ i ];
+      temp += medianColors[ j ][ i ];   
     }
-    resultColor[i] = resultColor[i] / 4;
+    resultColor[i] = temp / 4;    
   }
 
   int nextColorNo = getNextFreeArrayPlace();
@@ -496,6 +492,9 @@ void setNullScanValues() {
 
 int findColorInStorage()
 {
+  int threshold;
+  int upperLimit;
+  int lowerLimit;
   int ret=-1;
 
   for (int i = 0; i < 16; i++) {
@@ -540,34 +539,57 @@ int findColorInStorage()
 }
 
 void sortBeadToDynamicArray() {
-  int threshold;
-  int upperLimit;
-  int lowerLimit;
-
+  int index;
+  bool found=false;
   Serial.println("Analyzing Results:");
+  clearMedianColors();
 
-  int index=findColorInStorage();
-
-  if(index != -1)
+  for(int retries = 0; retries < 4; retries++ )
   {
-    Serial.print("Color is #"); Serial.print(storedColors[ index ][0]); Serial.println("");
-    if (autoSort) {
-      Serial.print("Color is R:"); Serial.print(storedColors[ index ][1]); Serial.print(" G:"); Serial.print(storedColors[ index ][2]); Serial.print(" B:"); Serial.print(storedColors[ index ][3]);
-      //            updateStoredColorCount(i);
-      //            updateDetectedColorFromTempStoredColor(i);
-    } else {
-      Serial.print("Color is #"); Serial.print(getColorNameFromNo(index)); Serial.print(". ");
+    index = findColorInStorage();
+    if(index != -1)
+    {
+      Serial.print("Color is #"); Serial.print(storedColors[ index ][0]); Serial.println("");
+      if (autoSort) {
+        Serial.print("Color is R:"); Serial.print(storedColors[ index ][1]); Serial.print(" G:"); Serial.print(storedColors[ index ][2]); Serial.print(" B:"); Serial.print(storedColors[ index ][3]);
+        //            updateStoredColorCount(i);
+        //            updateDetectedColorFromTempStoredColor(i);
+      } else {
+        Serial.print("Color is #"); Serial.print(getColorNameFromNo(index)); Serial.print(". ");
+      }
+      //Serial.println(storedColors[ index ][0]);
+
+      int containerNo = getContainerNo(index);
+      Serial.print("move stepper to container No:"); Serial.println(containerNo);
+      moveSorterToPosition(containerNo);
+      found= true;
+      break;
     }
-    //Serial.println(storedColors[ index ][0]);
-
-    int containerNo = getContainerNo(index);
-    Serial.print("move stepper to container No:"); Serial.println(containerNo);
-    moveSorterToPosition(containerNo);
-
+    addColorToMedianColors(retries);
+    servoWiggleIn();
+    readColorSensor();
   }
-  else
+
+
+
+  if(!found)
   {
+    char line[128];
+    // generate mean value of measurements for storage
+    for (int i = 0; i < 4; i++) {
+      long temp=0; 
+      for (int j = 0; j < 4; j++) {
+        temp += medianColors[ j ][ i ];   
+        snprintf(line, 128,"i=%d, j=%d temp=%ld med=%u", i,j,temp, medianColors[ j ][ i ]);
+        Serial.println(line);
+      }
+      resultColor[i] = temp / 4;    
+      snprintf(line, 128,"store = %u", resultColor[i]);
+      Serial.println(line);
+    }
+
     Serial.println("not found");
+
     if (autoSort) {
       Serial.println("autosort!");
       if (!allContainerFull()) {
@@ -584,6 +606,7 @@ void sortBeadToDynamicArray() {
       moveSorterToPosition(dynamicContainerArraySize - 1);
     }
   }
+  
 }
 
 int getContainerNo(int colorIndex) {
