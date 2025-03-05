@@ -1,3 +1,27 @@
+# Changes in this fork
+First of all, thanks to LinusB, RichA777 and hen3drik
+
+## Firmware: 
+* added debugging functions to make initial testing easier 
+* added retry function if color is not fouond immediately. 
+* average colors when learinig new color
+* optimized stepper movement to allways take the shortest path
+* replaced some (not all yet) magic numbers in the code by defines.
+* some code restructuring
+
+## Hardware
+* added variant for stepper with 3mm sqaure shaft
+* added variant of the Sequencer_tube: the original modified version sometimes got beads stuck in it.
+
+## more Ideas:
+ * aditional LED to color detection
+ * color sorting by measuring the distance
+ * plot color cloud (python script or something)
+ * 2 stage analyzer: to parallelize detection and sorting.
+   * replace delays with timeouts. 
+   * change analyzer Stage
+
+# original repo from @HEN3DRIK
 - 👋 Hi, I’m @HEN3DRIK
 - 👀 I’m interested in 3DPrinting and Electroforming/Electroplating
 - 📫 How to reach me 
