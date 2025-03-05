@@ -471,6 +471,22 @@ void storeColor(int index, int Clear, int red, int green, int blue) {
   //  storedColors[ index ][4] = 1;
 }
 
+unsigned int colorDistance(unsigned int color1[], unsigned int color2[])
+{
+  long long d=0;
+  long long sum=0;
+  unsigned int distance;
+  for(int i = 0; i<4; i++)
+  {
+    d = (long)color1[i] - (long)color2[i];
+    d = d*d;  // square
+    sum += d; // add all up
+  }
+
+  distance = sqrt(sum);
+  return distance;
+}
+
 boolean nullScan() {
   if ((resultColor[0] > (nullScanValues[0] - nullScanOffset) and resultColor[0] < (nullScanValues[0] + nullScanOffset)) and
       (resultColor[1] > (nullScanValues[1] - nullScanOffset) and resultColor[1] < (nullScanValues[1] + nullScanOffset)) and
@@ -558,6 +574,8 @@ void sortBeadToDynamicArray() {
         Serial.print("Color is #"); Serial.print(getColorNameFromNo(index)); Serial.print(". ");
       }
       //Serial.println(storedColors[ index ][0]);
+
+      Serial.print("Color Distance is: "); Serial.println(colorDistance(storedColors[ index ],resultColor ));
 
       int containerNo = getContainerNo(index);
       Serial.print("move stepper to container No:"); Serial.println(containerNo);
