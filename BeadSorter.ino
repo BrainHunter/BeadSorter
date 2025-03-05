@@ -6,22 +6,44 @@
 #define dirPin 2 //Stepper
 #define stepPin 3 //Stepper
 #define motorInterfaceType 1 //Stepper
-#define stepperMulti 100 //Stepper
+
+#define stepperMaxSpeed 6000
+#define stepperAccel 9000
+
+//#define stepperMulti 100 //Stepper
+#define stepperStepsPerRot 200
+#define stepperMicroStepping 16
+#define numContainerSlots 16    // in reality there are only 12, but 
+#define stepperMulti (stepperStepsPerRot*stepperMicroStepping/numContainerSlots)
 
 #define motorSpeed 255 //Container Motor
 #define GSM2 5 // Container Motor
 #define in3 7 //Container Motor
 #define in4 6 //Container Motor
+#define hopperMotorReverseTime  9000 //in ms - time of ~ revolution
 
 #define setupPin 11 //Setup
-#define photoSensorPin A0 //Photo Sensor
-#define nullScanOffset 200 
 
-#define angle 15 //Servo
+#define photoSensorPin A0 //Photo Sensor
+#define photoSensorThreshold 600
+
+
+#define nullScanOffset 150 
+
+#define servoAngleIn 28 //Servo
+#define servoAngleOut 51
+#define servoAngleWiggle 2
+#define servoPin 8
+
+
+// #define DEBUG_PROG 1 // Stepper test
+// #define DEBUG_PROG 2 // Color Sensor test
+// #define DEBUG_PRINT_PHOTOSENS
+
 
 // Parameters: https://learn.adafruit.com/adafruit-color-sensors/program-it
 //Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_24MS, TCS34725_GAIN_1X);
-Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_50MS, TCS34725_GAIN_1X);
+Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_101MS, TCS34725_GAIN_16X);
 //Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_101MS, TCS34725_GAIN_1X);
 
 //Max allowed color difference = thresholdFactor ∗ colorValue + offset (0,08/40)
@@ -33,14 +55,10 @@ Servo servo;
 AccelStepper stepper = AccelStepper(motorInterfaceType, stepPin, dirPin);
 
 boolean autoSort = true;
-int errorCounter = 0;
-int maxErrorCounter = 2;
-int resultColor[4] = {0, 0, 0, 0};
-int medianColors[4][4];
-int storedColors[16][4];
-int tempStoredColors[16][4];
+unsigned int resultColor[4] = {0, 0, 0, 0};
+unsigned int medianColors[4][4];
+unsigned int storedColors[16][4];
 
-int photoSensor = 0;
 
 boolean calibrateNullScan = true;
 int nullScanValues[4] = {6618, 1860, 2282, 2116}; //adjust these if no calibration
@@ -52,6 +70,7 @@ const int dynamicContainerArraySize = 16;
 int dynamicContainerArray[dynamicContainerArraySize] = { -1, 666, -1, -1, -1, 666, -1, -1, -1, 666, -1, -1, -1, 666 , -1 , -1};
 
 void setup() {
+  // Setup Hopper Motor Pins 
   pinMode(GSM2, OUTPUT);
   pinMode(in3, OUTPUT);
   pinMode(in4, OUTPUT);
@@ -64,14 +83,32 @@ void setup() {
   Serial.println("BeadSorter start");
 
   //Serial.println("Analyzer start");
-  servo.attach(8);
-  servo.write(angle);
+  servo.attach(servoPin);
+  servo.write(servoAngleIn);
 
   //stepper.setMaxSpeed(4000);
   //stepper.setAcceleration(5000);
-  stepper.setMaxSpeed(6000);
-  stepper.setAcceleration(9000);
+  stepper.setMaxSpeed(stepperMaxSpeed);
+  stepper.setAcceleration(stepperAccel);
   stepper.setCurrentPosition(0);
+
+#if defined DEBUG_PROG && DEBUG_PROG == 1
+  while (1)
+  {
+      Serial.println("goto 1000");
+      stepper.moveTo(1000);
+      stepper.runToPosition();
+
+    Serial.println("goto 0");
+      delay(400);
+      stepper.moveTo(0);
+      stepper.runToPosition();
+
+      delay(400);
+  }
+#endif
+
+
 
   if (tcs.begin()) {
     Serial.println("Sensor found");
@@ -79,6 +116,21 @@ void setup() {
     Serial.println("TCS34725 not found ... exiting!");
     while (1); // Stop program
   }
+
+#if defined DEBUG_PROG && DEBUG_PROG == 2
+  servoFeedOut();
+  servoFeedIn();
+  while (1)
+  {
+    readColorSensor();
+    Serial.print("Clear:"); Serial.print(resultColor[0]);
+    Serial.print("\tRed:"); Serial.print(resultColor[1]);
+    Serial.print("\tGreen:"); Serial.print(resultColor[2]);
+    Serial.print("\tBlue:"); Serial.print(resultColor[3]);
+    Serial.println("");
+    delay(400);
+  }
+#endif
 
   if (!autoSort) {
     Serial.println("Import default Colors");
@@ -103,22 +155,26 @@ void setup() {
 }
 
 void loop() {
-  photoSensor = analogRead(photoSensorPin);
-  //Serial.println("");Serial.println(photoSensor);
+  static bool successfullBead = false;
 
-  if (photoSensor > 750) {
-    if (!digitalRead(in3) && !digitalRead(in4)) {
-      digitalWrite(in3, LOW);  // start
-      digitalWrite(in4, HIGH);
-      analogWrite(GSM2, motorSpeed);
+  while(Serial.available())
+  {
+    int c;
+    c = Serial.read();
+    switch(c)
+    {
+      case 't':
+      case 'T': printTables();
+                break;
+      default: break;
     }
-    //Serial.println("Photosensor OK");
-  } else {
-    digitalWrite(in3, LOW);  // stop
-    digitalWrite(in4, LOW);
-    Serial.println("Photosensor Fail");
-    //analogWrite(GSM2, 0);
   }
+
+
+
+
+  handleHopperMotor(successfullBead);
+
 
   if (digitalRead(setupPin) == HIGH) {
     while (digitalRead(setupPin) == HIGH) {
@@ -148,36 +204,114 @@ void loop() {
     Serial.print("\tBlue:"); Serial.print(resultColor[3]);
     Serial.println("");
     sortBeadToDynamicArray();
-    errorCounter = 0;
+    successfullBead = true;
   } else {
     Serial.print(".");
-    errorCounter++;
+    //Serial.print("\tClear:"); Serial.print(resultColor[0]);
+    //Serial.print("\tRed:"); Serial.print(resultColor[1]);
+    //Serial.print("\tGreen:"); Serial.print(resultColor[2]);
+    //Serial.print("\tBlue:"); Serial.print(resultColor[3]);
+    //Serial.println("");
+    successfullBead = false;
   }
 
   servoFeedOut();
 
-  //Serial.print("errorcounter: ");Serial.print(errorCounter);Serial.print(" maxErrorCounter:"); Serial.println(maxErrorCounter);
-  if (errorCounter >= maxErrorCounter) {
-    reverseContainerMotor();
-    errorCounter = 0;
+
+}
+
+/*
+*   print all color tables to serial for debugging.
+*/
+void printTables(){
+  char line[128];
+
+  Serial.println("Nullscan:");
+  snprintf(line, 128,"%2d c=%5u r=%5u g=%5u b=%5u", 0, nullScanValues[0],nullScanValues[1],nullScanValues[2],nullScanValues[3]);
+  Serial.println(line);
+
+  Serial.println("Stored colors:");
+  for(int i = 0; i< 16; i++)
+  {
+    snprintf(line, 128,"%2d c=%5u r=%5u g=%5u b=%5u", i, storedColors[i][0],storedColors[i][1],storedColors[i][2],storedColors[i][3]);
+    Serial.println(line);
+  }
+
+  Serial.println("Stored colors:");
+  for( int i=0; i< dynamicContainerArraySize; i++)
+  {
+    Serial.print(dynamicContainerArray[i]);
+    Serial.print(" ");
+  }
+  Serial.println(" ");
+
+}
+
+
+/* Logic for the hopper motor
+*
+*  param successfullBead
+*
+*/
+void handleHopperMotor(bool successfullBead)
+{
+  static unsigned long timestamp = 0;
+  static bool direction = false;  
+  int photoSensor = 0;
+
+  // reverse motor if no successfull beads after timeout
+  if(!successfullBead )
+  {
+    if(timediff(timestamp, millis()) > hopperMotorReverseTime)
+    {
+      direction = !direction;
+      timestamp = millis();
+    }
+  }
+  else
+  {
+    timestamp = millis();
+  }
+
+  photoSensor = analogRead(photoSensorPin);
+#ifdef DEBUG_PRINT_PHOTOSENS
+  Serial.println("");Serial.println(photoSensor);
+#endif
+  if (photoSensor > photoSensorThreshold) {   //PhotoSensor detected no beads in the feeding tube
+    //if (!isHopperMotorRunning()) {
+      startHopperMotor(direction);
+    //}
+    //Serial.println("Photosensor OK");
+  } else {                                    //PhotoSensor detected beads in the feeding tube --> stop the motor
+    stopHopperMotor();
+    Serial.print("Photosensor detected Beads ");
+    Serial.println(photoSensor);
   }
 
 }
+
+unsigned long timediff(unsigned long t1, unsigned long t2)
+{
+    signed long d = (signed long)t1 - (signed long)t2;
+    if(d < 0) d = -d;
+    return (unsigned long) d;
+}
+
 
 void addColor() {
   int colorIndex;
 
   clearMedianColors();
-  stopMotor();
+  stopHopperMotor();
 
   Serial.print("Insert Color to register. Press button when done...");
 
   while (digitalRead(setupPin) == LOW) {
   }
 
-  startMotor();
+  startHopperMotor(false);
   delay(10000);
-  stopMotor();
+  stopHopperMotor();
   for (int i = 0; i < 4; i++) {
     Serial.print(i + 1); Serial.print("/4: ");
     servoFeedIn();
@@ -189,36 +323,54 @@ void addColor() {
   }
 
   calcMedianAndStore();
-  startMotor();
+  startHopperMotor(false);
 }
 
 void servoFeedIn() {
-  delay(200);
-  servo.write(16);
-  delay(200);
-  servo.write(18);
-  delay(200);
-  servo.write(17);
-  delay(200);
+  int low=servoAngleIn-servoAngleWiggle;
+  int high=servoAngleIn+servoAngleWiggle;
+
+  for(int i = low ; i<high ;i++)
+  {
+    servo.write(i);
+    delay(100);
+  } 
+}
+
+void servoWiggleIn() {
+  int low=servoAngleIn-servoAngleWiggle*2;
+  int high=servoAngleIn+servoAngleWiggle*2;
+
+  for(int c=0; c< 3; c++)
+  {
+    servo.write(low);
+    delay(100);
+    servo.write(high);
+    delay(100);
+  }
+  servo.write(servoAngleIn);
+  delay(100);
 }
 
 void servoFeedOut() {
-  servo.write(41);
+
+  int low=servoAngleOut-servoAngleWiggle;
+  int high=servoAngleOut+servoAngleWiggle;
+
+  for(int count = 0 ; count < 3 ; count ++)
+  {
+    for(int i = low ; i<high ;i++)
+    {
+      servo.write(i);
+      delay(100);
+    } 
+    for(int i = high ; i<low ;i--)
+    {
+      servo.write(i);
+      delay(50);
+    } 
+  }
   delay(200);
-  servo.write(44);
-  delay(200);
-  servo.write(41);
-  delay(200);
-  servo.write(44);
-  delay(200);
-  servo.write(41);
-  delay(200);
-  servo.write(44);
-  delay(200);
-  servo.write(41);
-  delay(200);
-  servo.write(44);
-  delay(500);
 }
 
 void readColorSensor() {
@@ -228,10 +380,10 @@ void readColorSensor() {
   delay(200); // Farbmessung dauert c. 50ms
   tcs.getRawData(&red, &green, &blue, &clearcol);
 
-  resultColor[0] = clearcol;
-  resultColor[1] = red;
-  resultColor[2] = green;
-  resultColor[3] = blue;
+  resultColor[0] = (unsigned int)clearcol;
+  resultColor[1] = (unsigned int)red;
+  resultColor[2] = (unsigned int)green;
+  resultColor[3] = (unsigned int)blue;
 }
 
 int addColorToMedianColors(int noOfTest) {
@@ -257,13 +409,13 @@ void clearMedianColors() {
   memset(medianColors, 0, sizeof(medianColors));
 }
 
-void calcMedianAndStore() {
-  memset(resultColor, 0, sizeof(resultColor));
+void calcMedianAndStore() { //  this is not a "median" this is a "mean"
   for (int i = 0; i < 4; i++) {
+    long temp = 0;
     for (int j = 0; j < 4; j++) {
-      resultColor[i] += medianColors[ j ][ i ];
+      temp += medianColors[ j ][ i ];   
     }
-    resultColor[i] = resultColor[i] / 4;
+    resultColor[i] = temp / 4;    
   }
 
   int nextColorNo = getNextFreeArrayPlace();
@@ -277,19 +429,19 @@ void calcMedianAndStore() {
 }
 
 void importDefaultColorSet() {
-  storeColor(0, 1032, 854, 766); //Orange
-  storeColor(1, 1331, 1321, 918); //Bright Yellow
-  storeColor(2, 532, 914, 797); //Green
-  storeColor(3, 512, 845, 967); //Dark Blue
-  storeColor(4, 1257, 1151, 1129); //Rose
-  storeColor(5, 1265, 1215, 1100); //Skin
-  storeColor(6, 756, 757, 721); // Red
-  storeColor(7, 1525, 1858, 1735); //White
-  storeColor(8, 512, 742, 700); //Black
-  storeColor(9, 939, 1462, 1101); //Lime Green
-  storeColor(10, 712, 1298, 1121); //Mint Green
-  storeColor(11, 1213, 975, 914); //Coral
-  storeColor(12, 1185, 1115, 876); //Dark Yellow
+  storeColor(0, -1, 1032, 854, 766); //Orange
+  storeColor(1, -1, 1331, 1321, 918); //Bright Yellow
+  storeColor(2, -1, 532, 914, 797); //Green
+  storeColor(3, -1, 512, 845, 967); //Dark Blue
+  storeColor(4, -1, 1257, 1151, 1129); //Rose
+  storeColor(5, -1, 1265, 1215, 1100); //Skin
+  storeColor(6, -1, 756, 757, 721); // Red
+  storeColor(7, -1, 1525, 1858, 1735); //White
+  storeColor(8, -1, 512, 742, 700); //Black
+  storeColor(9, -1, 939, 1462, 1101); //Lime Green
+  storeColor(10, -1, 712, 1298, 1121); //Mint Green
+  storeColor(11, -1, 1213, 975, 914); //Coral
+  storeColor(12, -1, 1185, 1115, 876); //Dark Yellow
 }
 
 String getColorNameFromNo(int colorNo) {
@@ -311,12 +463,28 @@ String getColorNameFromNo(int colorNo) {
   }
 }
 
-void storeColor(int index, int red, int green, int blue) {
-  storedColors[ index ][0] = index;
+void storeColor(int index, int Clear, int red, int green, int blue) {
+  storedColors[ index ][0] = Clear; 
   storedColors[ index ][1] = red;
   storedColors[ index ][2] = green;
   storedColors[ index ][3] = blue;
   //  storedColors[ index ][4] = 1;
+}
+
+unsigned int colorDistance(unsigned int color1[], unsigned int color2[])
+{
+  long long d=0;
+  long long sum=0;
+  unsigned int distance;
+  for(int i = 0; i<4; i++)
+  {
+    d = (long)color1[i] - (long)color2[i];
+    d = d*d;  // square
+    sum += d; // add all up
+  }
+
+  distance = sqrt(sum);
+  return distance;
 }
 
 boolean nullScan() {
@@ -338,72 +506,117 @@ void setNullScanValues() {
   Serial.print("Calibration results: "); Serial.print(nullScanValues[0]); Serial.print(" "); Serial.print(nullScanValues[1]); Serial.print(" "); Serial.print(nullScanValues[2]); Serial.print(" "); Serial.print(nullScanValues[3]); Serial.println("");
 }
 
-void sortBeadToDynamicArray() {
+int findColorInStorage()
+{
   int threshold;
   int upperLimit;
   int lowerLimit;
-  boolean found =  false;
-
-  copyColorsToTemp();
-
-  Serial.println("Analyzing Results:");
+  int ret=-1;
 
   for (int i = 0; i < 16; i++) {
-    threshold = thresholdFactor * resultColor[1] + offset;
-    upperLimit = resultColor[1] + threshold;
-    lowerLimit = resultColor[1] - threshold;
-    //        Serial.print(i);Serial.print(":R:"); Serial.print(threshold);Serial.println("");
-    //        Serial.print(i);Serial.print(":R:"); Serial.print(upperLimit);Serial.println("");
-    //        Serial.print(i);Serial.print(":R:"); Serial.print(lowerLimit);Serial.println("");
-    //        Serial.println(tempStoredColors[ i][1]);
-    if (tempStoredColors[ i ][1] >= lowerLimit and tempStoredColors[ i ][1] <= upperLimit) {
-      threshold = thresholdFactor * resultColor[2] + offset;
-      upperLimit = resultColor[2] + threshold;
-      lowerLimit = resultColor[2] - threshold;
-      //
-      //            Serial.print(i);Serial.print(":G:"); Serial.print(threshold);Serial.println("");
-      //            Serial.print(i);Serial.print(":G:"); Serial.print(upperLimit);Serial.println("");
-      //            Serial.print(i);Serial.print(":G:"); Serial.print(lowerLimit);Serial.println("");
-
-      if (tempStoredColors[ i ][2] >= lowerLimit and tempStoredColors[ i ][2] <= upperLimit) {
-        threshold = thresholdFactor * resultColor[3] + offset;
-        upperLimit = resultColor[3] + threshold;
-        lowerLimit = resultColor[3] - threshold;
+    threshold = thresholdFactor * resultColor[0] + offset;
+    upperLimit = resultColor[0] + threshold;
+    lowerLimit = resultColor[0] - threshold;
+    if (storedColors[ i ][0] >= lowerLimit and storedColors[ i ][0] <= upperLimit) {
+      threshold = thresholdFactor * resultColor[1] + offset;
+      upperLimit = resultColor[1] + threshold;
+      lowerLimit = resultColor[1] - threshold;
+      //        Serial.print(i);Serial.print(":R:"); Serial.print(threshold);Serial.println("");
+      //        Serial.print(i);Serial.print(":R:"); Serial.print(upperLimit);Serial.println("");
+      //        Serial.print(i);Serial.print(":R:"); Serial.print(lowerLimit);Serial.println("");
+      //        Serial.println(storedColors[ i][1]);
+      if (storedColors[ i ][1] >= lowerLimit and storedColors[ i ][1] <= upperLimit) {
+        threshold = thresholdFactor * resultColor[2] + offset;
+        upperLimit = resultColor[2] + threshold;
+        lowerLimit = resultColor[2] - threshold;
         //
-        //                Serial.print(i);Serial.print(":B:"); Serial.print(threshold);Serial.println("");
-        //                Serial.print(i);Serial.print(":B:"); Serial.print(upperLimit);Serial.println("");
-        //                Serial.print(i);Serial.print(":B:"); Serial.print(lowerLimit);Serial.println("");
+        //            Serial.print(i);Serial.print(":G:"); Serial.print(threshold);Serial.println("");
+        //            Serial.print(i);Serial.print(":G:"); Serial.print(upperLimit);Serial.println("");
+        //            Serial.print(i);Serial.print(":G:"); Serial.print(lowerLimit);Serial.println("");
 
-        if (tempStoredColors[ i ][3] >= lowerLimit and tempStoredColors[ i ][3] <= upperLimit) {
-          //          Serial.print("Color is #"); Serial.print(tempStoredColors[ i ][0]); Serial.println("");
-          if (autoSort) {
-            Serial.print("Color is R:"); Serial.print(tempStoredColors[ i ][1]); Serial.print(" G:"); Serial.print(tempStoredColors[ i ][2]); Serial.print(" B:"); Serial.print(tempStoredColors[ i ][3]);
-            //            updateStoredColorCount(i);
-            //            updateDetectedColorFromTempStoredColor(i);
-          } else {
-            Serial.print("Color is #"); Serial.print(getColorNameFromNo(tempStoredColors[ i ][0])); Serial.print(". ");
+        if (storedColors[ i ][2] >= lowerLimit and storedColors[ i ][2] <= upperLimit) {
+          threshold = thresholdFactor * resultColor[3] + offset;
+          upperLimit = resultColor[3] + threshold;
+          lowerLimit = resultColor[3] - threshold;
+          //
+          //                Serial.print(i);Serial.print(":B:"); Serial.print(threshold);Serial.println("");
+          //                Serial.print(i);Serial.print(":B:"); Serial.print(upperLimit);Serial.println("");
+          //                Serial.print(i);Serial.print(":B:"); Serial.print(lowerLimit);Serial.println("");
+
+          if (storedColors[ i ][3] >= lowerLimit and storedColors[ i ][3] <= upperLimit) {
+            //          Serial.print("Color is #"); Serial.print(storedColors[ i ][0]); Serial.println("");
+            return i;
           }
-          //Serial.println(tempStoredColors[ i ][0]);
-
-          int containerNo = getContainerNo(tempStoredColors[ i ][0]);
-          //Serial.print("move stepper to container No:"); Serial.println(containerNo);
-          moveSorterToPosition(containerNo);
-          found = true;
-          break;
         }
       }
     }
   }
+  return ret;
+}
 
-  if (!found) {
+void sortBeadToDynamicArray() {
+  int index;
+  bool found=false;
+  Serial.println("Analyzing Results:");
+  clearMedianColors();
+
+  for(int retries = 0; retries < 4; retries++ )
+  {
+    index = findColorInStorage();
+    if(index != -1)
+    {
+      Serial.print("Color is #"); Serial.print(storedColors[ index ][0]); Serial.println("");
+      if (autoSort) {
+        Serial.print("Color is R:"); Serial.print(storedColors[ index ][1]); Serial.print(" G:"); Serial.print(storedColors[ index ][2]); Serial.print(" B:"); Serial.print(storedColors[ index ][3]);
+        //            updateStoredColorCount(i);
+        //            updateDetectedColorFromTempStoredColor(i);
+      } else {
+        Serial.print("Color is #"); Serial.print(getColorNameFromNo(index)); Serial.print(". ");
+      }
+      //Serial.println(storedColors[ index ][0]);
+
+      Serial.print("Color Distance is: "); Serial.println(colorDistance(storedColors[ index ],resultColor ));
+
+      int containerNo = getContainerNo(index);
+      Serial.print("move stepper to container No:"); Serial.println(containerNo);
+      moveSorterToPosition(containerNo);
+      found= true;
+      break;
+    }
+    addColorToMedianColors(retries);
+    servoWiggleIn();
+    readColorSensor();
+  }
+
+
+
+  if(!found)
+  {
+    char line[128];
+    // generate mean value of measurements for storage
+    for (int i = 0; i < 4; i++) {
+      long temp=0; 
+      for (int j = 0; j < 4; j++) {
+        temp += medianColors[ j ][ i ];   
+        snprintf(line, 128,"i=%d, j=%d temp=%ld med=%u", i,j,temp, medianColors[ j ][ i ]);
+        Serial.println(line);
+      }
+      resultColor[i] = temp / 4;    
+      snprintf(line, 128,"store = %u", resultColor[i]);
+      Serial.println(line);
+    }
+
     Serial.println("not found");
+
     if (autoSort) {
       Serial.println("autosort!");
       if (!allContainerFull()) {
-        Serial.println("not allContainerFull. StoreColor");
-        storeColor(autoColorCounter, resultColor[1], resultColor[2], resultColor[3]);
+        Serial.print("not allContainerFull. StoreColor ");
+        Serial.println(autoColorCounter);
+        storeColor(autoColorCounter, resultColor[0] , resultColor[1], resultColor[2], resultColor[3]);
+        int containerNo = getContainerNo(autoColorCounter);
         autoColorCounter++;
-        moveSorterToPosition(dynamicContainerArraySize - 1);
+        moveSorterToPosition(containerNo);
       } else {
         moveSorterToPosition(dynamicContainerArraySize - 1);
       }
@@ -411,6 +624,7 @@ void sortBeadToDynamicArray() {
       moveSorterToPosition(dynamicContainerArraySize - 1);
     }
   }
+  
 }
 
 int getContainerNo(int colorIndex) {
@@ -458,57 +672,56 @@ bool allContainerFull() {
     arrayCounter++;
   }
 
-  return arrayCounter >= 15;
-}
-
-void copyColorsToTemp() {
-  memcpy(tempStoredColors, storedColors, sizeof(tempStoredColors));
+  return arrayCounter >= 15; // 15 is reserved for non sortable
 }
 
 void moveSorterToPosition(int position) {
   int currentPos = stepper.currentPosition() / stepperMulti;
-  int diffToPosition = abs(position - currentPos);
+  int diffToPosition = position - currentPos;
 
   // TODO: Es wird nur sequentiell angesteuert. 
-  //  if ((diffToPosition)>8){
-  //    int diff = 16 - diffToPosition ;
-  //    position = -diff;
-  //  }
-
+  if (diffToPosition > 8){  // motor can go in negative direction over the zero
+     position = currentPos + diffToPosition - 16;
+     //int diff = 16 - diffToPosition ;
+     //position = -diff;
+  }else if(diffToPosition < -8){  // motor can go in positive direction over the 15)
+    position = currentPos + diffToPosition + 16;
+  }
   position *= stepperMulti;
 
   stepper.moveTo(position);
   stepper.runToPosition();
+
+  // correct stepper position into ususal range:
+  stepper.setCurrentPosition( stepper.currentPosition() % (16*stepperMulti) );
 }
 
-void stopMotor() {
+void stopHopperMotor() {
   digitalWrite(in3, LOW);
   digitalWrite(in4, LOW);
   analogWrite(GSM2, motorSpeed);
 }
 
-void startMotor() {
-  digitalWrite(in3, HIGH);
-  digitalWrite(in4, LOW);
-  analogWrite(GSM2, motorSpeed);
-}
-
-void reverseContainerMotor() {
-
-  if (digitalRead(in3)) {
-    digitalWrite(in3, LOW);
-  } else {
+void startHopperMotor(bool dir) {
+  if(dir)
+  {
     digitalWrite(in3, HIGH);
-  }
-
-  if (!digitalRead(in4)) {
-    digitalWrite(in4, HIGH);
-  } else {
     digitalWrite(in4, LOW);
   }
-
+  else
+  {
+    digitalWrite(in3, LOW);
+    digitalWrite(in4, HIGH);
+  }
   analogWrite(GSM2, motorSpeed);
 }
+
+// return true if 
+bool isHopperMotorRunning()
+{
+  return digitalRead(in3) || digitalRead(in4);
+}
+
 
 //void updateDetectedColorFromTempStoredColor(int i) {
 //  Serial.println(""); Serial.println("Updating color.");
